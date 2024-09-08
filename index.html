@@ -73,7 +73,7 @@
     z-index: 1;
   }
 
-  #messageContent, #deleteCodeInput {
+  #messageContent, #deleteCodeInput, #mathAnswer {
     padding: 15px;
     border: 2px solid #e0e0e0;
     border-radius: 12px;
@@ -86,7 +86,7 @@
     resize: vertical;
   }
 
-  #messageContent:focus, #deleteCodeInput:focus {
+  #messageContent:focus, #deleteCodeInput:focus, #mathAnswer:focus {
     outline: none;
     border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
@@ -188,6 +188,11 @@
     background-color: #c0392b;
   }
 
+  #mathQuestion {
+    margin-bottom: 10px;
+    font-weight: bold;
+  }
+
   @media (max-width: 768px) {
     .container {
       padding: 2rem;
@@ -205,6 +210,8 @@
   <h1>匿名留言系統</h1>
   <form id="messageForm">
     <textarea id="messageContent" placeholder="輸入您的留言" required></textarea>
+    <div id="mathQuestion"></div>
+    <input type="number" id="mathAnswer" placeholder="請輸入答案" required>
     <button type="submit" id="postMessageButton">發布留言</button>
   </form>
   <form id="deleteForm">
@@ -217,6 +224,8 @@
 <script>
 const API_URL = 'https://script.google.com/macros/s/AKfycbwzxj0PccH4JcM0l6DZ8-YVgCmXy4qadX4nIy5GFrVR6uVGyd94RBOuCwjun1-O0Db9/exec';
 let sessionId;
+let mathQuestion;
+let mathAnswer;
 
 function showNotification(message, type = 'info') {
   const notificationsContainer = document.getElementById('notifications');
@@ -271,7 +280,9 @@ async function postMessage(content) {
     if (result.success) {
       showNotification('留言發布成功', 'success');
       document.getElementById('messageContent').value = '';
+      document.getElementById('mathAnswer').value = '';
       showNotification(`您的刪除代碼是: ${result.deleteCode}`, 'info');
+      generateMathQuestion();
     } else {
       throw new Error('留言發布失敗');
     }
@@ -306,13 +317,31 @@ async function requestDeleteMessage(deleteCode) {
   }
 }
 
+function generateMathQuestion() {
+  const num1 = Math.floor(Math.random() * 10) + 1;
+  const num2 = Math.floor(Math.random() * 10) + 1;
+  const operation = Math.random() < 0.5 ? '+' : '-';
+
+  mathQuestion = `${num1} ${operation} ${num2} = ?`;
+  mathAnswer = operation === '+' ? num1 + num2 : num1 - num2;
+
+  document.getElementById('mathQuestion').textContent = `請回答: ${mathQuestion}`;
+}
+
 document.getElementById('messageForm').addEventListener('submit', async (event) => {
   event.preventDefault();
   const content = document.getElementById('messageContent').value.trim();
-  if (content) {
-    await postMessage(content);
+  const userAnswer = parseInt(document.getElementById('mathAnswer').value);
+
+  if (content && !isNaN(userAnswer)) {
+    if (userAnswer === mathAnswer) {
+      await postMessage(content);
+    } else {
+      showNotification('數學答案不正確，請重試', 'error');
+      generateMathQuestion();
+    }
   } else {
-    showNotification('請輸入留言內容', 'error');
+    showNotification('請輸入留言內容和正確的數學答案', 'error');
   }
 });
 
@@ -326,12 +355,13 @@ document.getElementById('deleteForm').addEventListener('submit', async (event) =
   }
 });
 
-// 頁面載入時檢查是否有現有的 sessionId，如果沒有則取得新的
+// 頁面載入時檢查是否有現有的 sessionId，如果沒有則取得新的，並生成數學問題
 window.addEventListener('load', async () => {
   sessionId = localStorage.getItem('sessionId');
   if (!sessionId) {
     await getNewSession();
   }
+  generateMathQuestion();
 });
 
 // 添加按鈕點擊動畫效果
