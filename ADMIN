@@ -1,0 +1,319 @@
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>匿名留言系統管理員界面</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary-color: #3498db;
+    --secondary-color: #2c3e50;
+    --background-color: #ecf0f1;
+    --text-color: #34495e;
+    --success-color: #2ecc71;
+    --danger-color: #e74c3c;
+    --warning-color: #f39c12;
+    --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --transition: all 0.3s ease;
+  }
+
+  body {
+    font-family: 'Roboto', 'Noto Sans TC', sans-serif;
+    line-height: 1.6;
+    color: var(--text-color);
+    background-color: var(--background-color);
+    margin: 0;
+    padding: 20px;
+  }
+
+  .container {
+    max-width: 1000px;
+    margin: 0 auto;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: var(--box-shadow);
+    padding: 2rem;
+  }
+
+  h1, h2 {
+    color: var(--primary-color);
+    text-align: center;
+  }
+
+  #loginForm, #adminPanel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  input, button {
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+  }
+
+  button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    cursor: pointer;
+    transition: var(--transition);
+  }
+
+  button:hover {
+    background-color: #2980b9;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+  }
+
+  th, td {
+    border: 1px solid #ddd;
+    padding: 12px;
+    text-align: left;
+  }
+
+  th {
+    background-color: var(--secondary-color);
+    color: white;
+  }
+
+  tr:nth-child(even) {
+    background-color: #f2f2f2;
+  }
+
+  .action-buttons {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .approve-btn {
+    background-color: var(--success-color);
+  }
+
+  .approve-btn:hover {
+    background-color: #27ae60;
+  }
+
+  .reject-btn {
+    background-color: var(--danger-color);
+  }
+
+  .reject-btn:hover {
+    background-color: #c0392b;
+  }
+
+  .message-content {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #notifications {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+  }
+
+  .notification {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 1rem;
+    margin-bottom: 0.5rem;
+    border-radius: 4px;
+    box-shadow: var(--box-shadow);
+    opacity: 0;
+    transform: translateX(100%);
+    transition: var(--transition);
+  }
+
+  .notification.show {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .notification.success {
+    background-color: var(--success-color);
+  }
+
+  .notification.error {
+    background-color: var(--danger-color);
+  }
+
+  @media (max-width: 768px) {
+    .container {
+      padding: 1rem;
+    }
+
+    table, tr, td {
+      display: block;
+    }
+
+    tr {
+      margin-bottom: 0.5rem;
+    }
+
+    td {
+      border: none;
+      position: relative;
+      padding-left: 50%;
+    }
+
+    td:before {
+      content: attr(data-label);
+      position: absolute;
+      left: 6px;
+      width: 45%;
+      padding-right: 10px;
+      white-space: nowrap;
+      font-weight: bold;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>匿名留言系統管理員界面</h1>
+  <div id="loginForm">
+    <input type="text" id="username" placeholder="管理員用戶名" required>
+    <input type="password" id="password" placeholder="密碼" required>
+    <button id="loginButton">登入</button>
+  </div>
+  <div id="adminPanel" style="display: none;">
+    <h2>刪除請求列表</h2>
+    <table id="deleteRequestsTable">
+      <thead>
+        <tr>
+          <th>留言內容</th>
+          <th>請求時間</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+<div id="notifications"></div>
+
+<script>
+const API_URL = 'https://script.google.com/macros/s/AKfycbwzxj0PccH4JcM0l6DZ8-YVgCmXy4qadX4nIy5GFrVR6uVGyd94RBOuCwjun1-O0Db9/exec';
+let adminToken = localStorage.getItem('adminToken');
+
+function showNotification(message, type = 'info') {
+  const notificationsContainer = document.getElementById('notifications');
+  const notification = document.createElement('div');
+  notification.className = `notification ${type}`;
+  notification.textContent = message;
+  notificationsContainer.appendChild(notification);
+
+  setTimeout(() => {
+    notification.classList.add('show');
+  }, 100);
+
+  setTimeout(() => {
+    notification.classList.remove('show');
+    setTimeout(() => {
+      notificationsContainer.removeChild(notification);
+    }, 300);
+  }, 3000);
+}
+
+async function adminLogin(username, password) {
+  try {
+    const response = await fetch(`${API_URL}?action=adminLogin&username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`);
+    const result = await response.json();
+    if (result.success) {
+      adminToken = result.adminToken;
+      localStorage.setItem('adminToken', adminToken);
+      document.getElementById('loginForm').style.display = 'none';
+      document.getElementById('adminPanel').style.display = 'block';
+      await loadDeleteRequests();
+      showNotification('登入成功', 'success');
+    } else {
+      throw new Error('登入失敗，請檢查用戶名和密碼');
+    }
+  } catch (error) {
+    showNotification(error.message, 'error');
+  }
+}
+
+async function loadDeleteRequests() {
+  try {
+    const response = await fetch(`${API_URL}?action=getDeleteRequests&adminToken=${adminToken}`);
+    const result = await response.json();
+    if (result.success) {
+      const tableBody = document.querySelector('#deleteRequestsTable tbody');
+      tableBody.innerHTML = '';
+      result.requests.forEach(request => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td data-label="留言內容" class="message-content">${request.deleteCode}</td>
+          <td data-label="請求時間">${new Date(request.timestamp).toLocaleString('zh-TW')}</td>
+          <td data-label="操作">
+            <div class="action-buttons">
+              <button class="approve-btn" data-id="${request.id}">批准</button>
+              <button class="reject-btn" data-id="${request.id}">拒絕</button>
+            </div>
+          </td>
+        `;
+        tableBody.appendChild(row);
+      });
+    } else {
+      throw new Error('載入刪除請求失敗');
+    }
+  } catch (error) {
+    showNotification(error.message, 'error');
+  }
+}
+
+async function handleDeleteRequest(requestId, action) {
+  try {
+    const response = await fetch(`${API_URL}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: `action=admin${action.charAt(0).toUpperCase() + action.slice(1)}DeleteRequest&requestId=${requestId}&adminToken=${adminToken}`,
+    });
+    const result = await response.json();
+    if (result.success) {
+      showNotification(`成功${action === 'approve' ? '批准' : '拒絕'}刪除請求`, 'success');
+      await loadDeleteRequests();
+    } else {
+      throw new Error(`${action === 'approve' ? '批准' : '拒絕'}刪除請求失敗`);
+    }
+  } catch (error) {
+    showNotification(error.message, 'error');
+  }
+}
+
+document.getElementById('loginButton').addEventListener('click', async () => {
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  await adminLogin(username, password);
+});
+
+document.getElementById('deleteRequestsTable').addEventListener('click', async (e) => {
+  if (e.target.classList.contains('approve-btn') || e.target.classList.contains('reject-btn')) {
+    const requestId = e.target.getAttribute('data-id');
+    const action = e.target.classList.contains('approve-btn') ? 'approve' : 'reject';
+    await handleDeleteRequest(requestId, action);
+  }
+});
+
+async function initAdminPanel() {
+  if (adminToken) {
+    document.getElementById('loginForm').style.display = 'none';
+    document.getElementById('adminPanel').style.display = 'block';
+    await loadDeleteRequests();
+  }
+}
+
+initAdminPanel();
+</script>
+</body></html>
