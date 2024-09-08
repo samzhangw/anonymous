@@ -1,4 +1,4 @@
-<html><head><base href="https://example.com/anonymous-message-system/">
+<html><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>匿名留言系統管理員界面</title>
@@ -26,12 +26,13 @@
     min-height: 100vh;
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: flex-start;
+    padding-top: 2rem;
   }
 
   .container {
     width: 100%;
-    max-width: 1000px;
+    max-width: 1200px;
     background-color: #fff;
     border-radius: 12px;
     box-shadow: var(--box-shadow);
@@ -51,6 +52,13 @@
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
+  }
+
+  .admin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
   }
 
   input, button {
@@ -81,6 +89,47 @@
     background-color: #3a7bc8;
     transform: translateY(-2px);
     box-shadow: 0 7px 14px rgba(50, 50, 93, 0.1), 0 3px 6px rgba(0, 0, 0, 0.08);
+  }
+
+  #logoutButton {
+    background-color: var(--danger-color);
+    padding: 8px 16px;
+    font-size: 14px;
+  }
+
+  #logoutButton:hover {
+    background-color: #c0392b;
+  }
+
+  .tabs {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 2rem;
+  }
+
+  .tab-button {
+    background-color: transparent;
+    color: var(--text-color);
+    border: none;
+    padding: 10px 20px;
+    margin: 0 10px;
+    cursor: pointer;
+    font-weight: 700;
+    transition: var(--transition);
+    border-bottom: 3px solid transparent;
+  }
+
+  .tab-button.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+  }
+
+  .tab-content {
+    display: none;
+  }
+
+  .tab-content.active {
+    display: block;
   }
 
   table {
@@ -120,7 +169,7 @@
     gap: 0.75rem;
   }
 
-  .approve-btn, .reject-btn {
+  .approve-btn, .reject-btn, .delete-btn {
     padding: 8px 16px;
     font-size: 14px;
     border-radius: 4px;
@@ -134,11 +183,11 @@
     background-color: #219a52;
   }
 
-  .reject-btn {
+  .reject-btn, .delete-btn {
     background-color: var(--danger-color);
   }
 
-  .reject-btn:hover {
+  .reject-btn:hover, .delete-btn:hover {
     background-color: #c0392b;
   }
 
@@ -229,17 +278,40 @@
     <button id="loginButton">登入</button>
   </div>
   <div id="adminPanel" style="display: none;">
-    <h2>刪除請求列表</h2>
-    <table id="deleteRequestsTable">
-      <thead>
-        <tr>
-          <th>留言內容</th>
-          <th>請求時間</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+    <div class="admin-header">
+      <h2>管理員面板</h2>
+      <button id="logoutButton">登出</button>
+    </div>
+    <div class="tabs">
+      <button class="tab-button active" data-tab="messages">所有留言</button>
+      <button class="tab-button" data-tab="deleteRequests">刪除請求</button>
+    </div>
+    <div id="messagesTab" class="tab-content active">
+      <h2>所有留言</h2>
+      <table id="messagesTable">
+        <thead>
+          <tr>
+            <th>留言內容</th>
+            <th>發布時間</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div id="deleteRequestsTab" class="tab-content">
+      <h2>刪除請求列表</h2>
+      <table id="deleteRequestsTable">
+        <thead>
+          <tr>
+            <th>留言內容</th>
+            <th>請求時間</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </div>
 </div>
 <div id="notifications"></div>
@@ -276,10 +348,39 @@ async function adminLogin(username, password) {
       localStorage.setItem('adminToken', adminToken);
       document.getElementById('loginForm').style.display = 'none';
       document.getElementById('adminPanel').style.display = 'block';
+      await loadMessages();
       await loadDeleteRequests();
       showNotification('登入成功', 'success');
     } else {
       throw new Error('登入失敗，請檢查用戶名和密碼');
+    }
+  } catch (error) {
+    showNotification(error.message, 'error');
+  }
+}
+
+async function loadMessages() {
+  try {
+    const response = await fetch(`${API_URL}?action=getAllMessages&adminToken=${adminToken}`);
+    const result = await response.json();
+    if (result.success) {
+      const tableBody = document.querySelector('#messagesTable tbody');
+      tableBody.innerHTML = '';
+      result.messages.forEach(message => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td data-label="留言內容" class="message-content">${message.content}</td>
+          <td data-label="發布時間">${new Date(message.timestamp).toLocaleString('zh-TW')}</td>
+          <td data-label="操作">
+            <div class="action-buttons">
+              <button class="delete-btn" data-id="${message.id}">刪除</button>
+            </div>
+          </td>
+        `;
+        tableBody.appendChild(row);
+      });
+    } else {
+      throw new Error('載入留言失敗');
     }
   } catch (error) {
     showNotification(error.message, 'error');
@@ -328,6 +429,7 @@ async function handleDeleteRequest(requestId, action) {
     if (result.success) {
       showNotification(`成功${action === 'approve' ? '批准' : '拒絕'}刪除請求`, 'success');
       await loadDeleteRequests();
+      await loadMessages();
     } else {
       throw new Error(`${action === 'approve' ? '批准' : '拒絕'}刪除請求失敗`);
     }
@@ -336,11 +438,44 @@ async function handleDeleteRequest(requestId, action) {
   }
 }
 
+async function handleDeleteMessage(messageId) {
+  try {
+    const response = await fetch(`${API_URL}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: `action=adminDeleteMessage&messageId=${messageId}&adminToken=${adminToken}`,
+    });
+    const result = await response.json();
+    if (result.success) {
+      showNotification('成功刪除留言', 'success');
+      await loadMessages();
+    } else {
+      throw new Error('刪除留言失敗');
+    }
+  } catch (error) {
+    showNotification(error.message, 'error');
+  }
+}
+
+function logout() {
+  adminToken = null;
+  localStorage.removeItem('adminToken');
+  document.getElementById('loginForm').style.display = 'flex';
+  document.getElementById('adminPanel').style.display = 'none';
+  document.getElementById('username').value = '';
+  document.getElementById('password').value = '';
+  showNotification('已成功登出', 'success');
+}
+
 document.getElementById('loginButton').addEventListener('click', async () => {
   const username = document.getElementById('username').value;
   const password = document.getElementById('password').value;
   await adminLogin(username, password);
 });
+
+document.getElementById('logoutButton').addEventListener('click', logout);
 
 document.getElementById('deleteRequestsTable').addEventListener('click', async (e) => {
   if (e.target.classList.contains('approve-btn') || e.target.classList.contains('reject-btn')) {
@@ -350,10 +485,30 @@ document.getElementById('deleteRequestsTable').addEventListener('click', async (
   }
 });
 
+document.getElementById('messagesTable').addEventListener('click', async (e) => {
+  if (e.target.classList.contains('delete-btn')) {
+    const messageId = e.target.getAttribute('data-id');
+    if (confirm('確定要刪除這條留言嗎？')) {
+      await handleDeleteMessage(messageId);
+    }
+  }
+});
+
+document.querySelector('.tabs').addEventListener('click', (e) => {
+  if (e.target.classList.contains('tab-button')) {
+    const tabId = e.target.getAttribute('data-tab');
+    document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+    e.target.classList.add('active');
+    document.getElementById(`${tabId}Tab`).classList.add('active');
+  }
+});
+
 async function initAdminPanel() {
   if (adminToken) {
     document.getElementById('loginForm').style.display = 'none';
     document.getElementById('adminPanel').style.display = 'block';
+    await loadMessages();
     await loadDeleteRequests();
   }
 }
